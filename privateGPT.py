@@ -8,16 +8,20 @@ import chromadb
 import os
 import argparse
 import time
+import pandas as pd
+
+# Make sure the results directory exist
+if not os.path.exists('results'):
+    os.makedirs('results')
 
 model = os.environ.get("MODEL", "mistral")
 # For embeddings model, the example uses a sentence-transformers model
-# https://www.sbert.net/docs/pretrained_models.html 
-# "The all-mpnet-base-v2 model provides the best quality, while all-MiniLM-L6-v2 is 5 times faster and still offers good quality."
 embeddings_model_name = os.environ.get("EMBEDDINGS_MODEL_NAME", "all-MiniLM-L6-v2")
 persist_directory = os.environ.get("PERSIST_DIRECTORY", "db")
-target_source_chunks = int(os.environ.get('TARGET_SOURCE_CHUNKS',4))
+target_source_chunks = int(os.environ.get('TARGET_SOURCE_CHUNKS', 4))
 
 from constants import CHROMA_SETTINGS
+
 
 def main():
     # Parse the command line arguments
@@ -32,7 +36,8 @@ def main():
 
     llm = Ollama(model=model, callbacks=callbacks)
 
-    qa = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever, return_source_documents= not args.hide_source)
+    qa = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever,
+                                    return_source_documents= not args.hide_source)
     # Interactive questions and answers
     while True:
         query = input("\nEnter a query: ")
@@ -47,6 +52,10 @@ def main():
         answer, docs = res['result'], [] if args.hide_source else res['source_documents']
         end = time.time()
 
+        # Save the question and answer into an Excel file
+        df = pd.DataFrame({'Question': [query], 'Response': [answer]})
+        df.to_csv('results/results.csv', mode='a', index=False)
+
         # Print the result
         print("\n\n> Question:")
         print(query)
@@ -57,9 +66,10 @@ def main():
             print("\n> " + document.metadata["source"] + ":")
             print(document.page_content)
 
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description='privateGPT: Ask questions to your documents without an internet connection, '
-                                                 'using the power of LLMs.')
+                                                'using the power of LLMs.')
     parser.add_argument("--hide-source", "-S", action='store_true',
                         help='Use this flag to disable printing of source documents used for answers.')
 
